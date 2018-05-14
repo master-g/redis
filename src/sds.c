@@ -39,6 +39,7 @@
 #include "sds.h"
 #include "sdsalloc.h"
 
+/* 根据 type 返回对应 sds 头结构大小 */
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -55,6 +56,7 @@ static inline int sdsHdrSize(char type) {
     return 0;
 }
 
+/* 根据字符串预期长度返回对应 sds 类型 */
 static inline char sdsReqType(size_t string_size) {
     if (string_size < 1<<5)
         return SDS_TYPE_5;
@@ -69,31 +71,31 @@ static inline char sdsReqType(size_t string_size) {
     return SDS_TYPE_64;
 }
 
-/* Create a new sds string with the content specified by the 'init' pointer
- * and 'initlen'.
- * If NULL is used for 'init' the string is initialized with zero bytes.
+/* 根据 init 和 initlen 创建新的 sds 字符串
+ * 如果 init 是 NULL 则用 0 初始化新创建的 sds 字符串
  *
- * The string is always null-termined (all the sds strings are, always) so
- * even if you create an sds string with:
+ * sds字符串始终是以 null 结束的, 即使以下面的方式初始化 sds 字符串
  *
- * mystring = sdsnewlen("abc",3);
+ * mystring = sdsnewlen("abc", 3);
  *
- * You can print the string with printf() as there is an implicit \0 at the
- * end of the string. However the string is binary safe and can contain
- * \0 characters in the middle, as the length is stored in the sds header. */
+ * 你也可以使用 printf() 来打印该字符串, 因为 sds 会额外添加一个 \0 到尾部
+ * 但同时 sds 字符串也是二进制兼容的, 你能在 sds 中间包含一个 \0
+ * 因为字符串的长度已经包含在头部结构当中了
+ */
 sds sdsnewlen(const void *init, size_t initlen) {
-    void *sh;
-    sds s;
-    char type = sdsReqType(initlen);
-    /* Empty strings are usually created in order to append. Use type 8
-     * since type 5 is not good at this. */
-    if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
-    int hdrlen = sdsHdrSize(type);
-    unsigned char *fp; /* flags pointer. */
+    void *sh;                                       /* 指向头结构体 */
+    sds s;                                          /* 指向字符串 */
+    char type = sdsReqType(initlen);                /* 根据 initlen 选取合适的 sds 类型 */
 
-    sh = s_malloc(hdrlen+initlen+1);
+    if (type == SDS_TYPE_5 && initlen == 0)
+      type = SDS_TYPE_8;                            /* 当 initlen 为 0 时, 字符串通常是用来进行 append 操作的
+                                                     * 此时使用 type 8 比 type 5 更适合 */
+    int hdrlen = sdsHdrSize(type);
+    unsigned char *fp;                              /* flags pointer. */
+
+    sh = s_malloc(hdrlen+initlen+1);                /* 头大小 + 字符串长度 + 结束符 */
     if (!init)
-        memset(sh, 0, hdrlen+initlen+1);
+        memset(sh, 0, hdrlen+initlen+1);            /* 初始字符串为空时, 使用 0 初始化 */
     if (sh == NULL) return NULL;
     s = (char*)sh+hdrlen;
     fp = ((unsigned char*)s)-1;
@@ -131,7 +133,7 @@ sds sdsnewlen(const void *init, size_t initlen) {
             break;
         }
     }
-    if (initlen && init)
+    if (initlen && init)                            /* 拷贝字符串, 设置结束符 */
         memcpy(s, init, initlen);
     s[initlen] = '\0';
     return s;
